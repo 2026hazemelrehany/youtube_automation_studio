@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Studio Login</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 16px; }
+    .box { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 24px; width: 100%; max-width: 340px; }
+    input { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 16px; margin: 12px 0; }
+    button { width: 100%; padding: 12px; border-radius: 10px; border: none; background: #3b82f6; color: white; font-weight: 600; font-size: 15px; cursor: pointer; }
+    .err { color: #fca5a5; font-size: 13px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <form class="box" method="post" action="/login">
+    <h2 style="margin:0 0 8px;">YouTube Studio PIN</h2>
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+    <input type="password" name="pin" placeholder="Enter STUDIO_PIN" autofocus required />
+    <button type="submit">Unlock</button>
+  </form>
+</body>
+</html>

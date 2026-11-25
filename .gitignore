@@ -1,0 +1,18 @@
+﻿.env
+.env.*
+!.env.example
+client_secret*.json
+tokens/
+*.json
+studio.db
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+queue/
+uploaded/
+work/
+*.mp4
+*.mp3
+*.wav
+powershell.windows powershell.txt

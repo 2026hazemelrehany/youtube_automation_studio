@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>YouTube Studio Controller</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 14px; }
+    .container { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 1.35rem; margin: 4px 0; }
+    .subtitle { color: #94a3b8; font-size: 0.9rem; margin-bottom: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 16px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 14px; padding: 16px; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .badge-ok { background: #065f46; color: #a7f3d0; }
+    .badge-warn { background: #7c2d12; color: #fed7aa; }
+    .badge-kids { background: #1e40af; color: #bfdbfe; }
+    button { background: #3b82f6; color: white; border: none; padding: 12px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px; width: 100%; margin-top: 10px; }
+    button:active { transform: scale(0.99); }
+    button.secondary { background: #334155; }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    input, select, textarea { background: #0f172a; color: #e2e8f0; border: 1px solid #334155; padding: 10px 12px; border-radius: 10px; width: 100%; margin-top: 6px; font-size: 15px; }
+    label { font-size: 13px; color: #cbd5e1; display: block; margin-top: 10px; }
+    pre { background: #0f172a; padding: 12px; border-radius: 10px; overflow-x: auto; font-size: 13px; white-space: pre-wrap; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #334155; }
+    a { color: #60a5fa; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>YouTube Studio Controller</h1>
+    <div class="subtitle">Mobile-Ready &bull; Kids + Games &amp; Movies &bull; English Regions (US, GB, CA, AU)</div>
+
+    
+    <div style="margin-bottom:10px;"><span id="chosenTopicBadge" class="badge badge-kids" style="display:none;"></span></div>
+    <div id="progressCard" class="card" style="display:none; margin-bottom:16px; border-color:#38bdf8;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+        <strong id="progressTopic" style="color:#facc15; font-size:1.05rem;">Working on: ...</strong>
+        <span id="progressPct" style="font-weight:700; font-size:0.95rem;">0%</span>
+      </div>
+      <div style="background:#0f172a; border-radius:999px; height:14px; overflow:hidden; margin:10px 0;">
+        <div id="progressBar" style="background:linear-gradient(90deg,#3b82f6,#10b981); width:0%; height:100%; transition:width 0.4s ease;"></div>
+      </div>
+      <div id="progressMsg" style="font-size:14px; font-weight:600; color:#e2e8f0; margin-bottom:8px;">Starting...</div>
+      <div id="previewFilmstrip" style="display:flex; gap:8px; overflow-x:auto; margin-bottom:10px;"></div>
+      <div id="videoPreviewBox" style="display:none; margin-bottom:12px;">
+        <video id="videoPlayer" controls playsinline style="width:100%; max-height:420px; border-radius:12px; background:#000;"></video>
+      </div>
+      <div id="stepsLog" style="background:#0f172a; border-radius:10px; padding:10px; font-size:12px; color:#94a3b8; max-height:130px; overflow-y:auto; margin-bottom:10px;"></div>
+
+      <div class="btn-row">
+        <button id="pauseBtn" style="background:#f59e0b; color:#0f172a;" onclick="pauseAndEdit()">Pause &amp; Edit</button>
+        <button id="continueBtn" style="background:#10b981;" onclick="continueProcess()" disabled>Continue</button>
+      </div>
+
+      <div id="editPanel" style="display:none; margin-top:14px; padding-top:12px; border-top:1px solid #334155;">
+        <strong style="color:#38bdf8;">Edit Video Before Continuing:</strong>
+        <label>Title</label>
+        <input id="editTitle" />
+        <label>Description</label>
+        <textarea id="editDescription" rows="2"></textarea>
+        <label>Tags (comma-separated)</label>
+        <input id="editTags" />
+        <div id="editScenesContainer" style="margin-top:10px;"></div>
+        <button style="background:#10b981; margin-top:12px;" onclick="continueProcess(true)">Save Changes &amp; Continue</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      {% for key, ch in channels.items() %}
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <h2 style="margin:0; font-size:1.1rem;">{{ ch.label }}</h2>
+          <span class="badge {{ 'badge-ok' if ch.connected else 'badge-warn' }}">
+            {{ 'Connected' if ch.connected else 'Not Connected' }}
+          </span>
+        </div>
+        <div style="margin-top:8px;">
+          <span class="badge badge-kids">{{ 'Made for Kids (COPPA)' if ch.made_for_kids else 'General Audience' }}</span>
+        </div>
+
+        {% if ch.connected and ch.profile %}
+          <p style="margin:12px 0 4px;"><strong>{{ ch.profile.title }}</strong> &bull; {{ ch.profile.subscribers }} subs</p>
+          {% if ch.analytics %}
+            <p style="margin:0; color:#94a3b8; font-size:13px;">28d: {{ ch.analytics.views }} views &bull; {{ ch.analytics.watch_minutes }} mins &bull; +{{ ch.analytics.subs_gained }} subs</p>
+          {% endif %}
+          <p style="margin:10px 0 4px; font-size:13px;">Queue ({{ ch.queued|length }}): {{ ch.queued|join(', ') if ch.queued else 'Empty' }}</p>
+          <div class="btn-row">
+            <button onclick="loadTrends('{{ key }}')">Scan Trends</button>
+            <button class="secondary" onclick="uploadNow('{{ key }}')">Post Next Now</button>
+          </div>
+          <button style="background:#10b981;" onclick="runAutopilot('{{ key }}')">CC Montage Auto-Pilot (Download + Remix + Post)</button>
+          <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13px;">
+            <input type="checkbox" id="aiToggle_{{ key }}" checked style="width:auto; margin:0;" />
+            AI-Generated Video Disclosure (YouTube Synthetic Media)
+          </label>
+          <button style="background:#0ea5e9;" onclick="produceOnly('{{ key }}')">AI Generator (AI Video to Queue)</button>
+          <button style="background:#8b5cf6;" onclick="runBatch5('{{ key }}')">Generate 5 Posts (Remix &amp; Upload 5)</button>
+          <button style="background:#ec4899;" onclick="runViralAgent('{{ key }}')">Run Viral AI Agent (Optimize + Post)</button>
+          </div>
+        {% else %}
+          <form method="post" action="/connect/{{ key }}">
+            <button type="submit">Connect Google OAuth</button>
+          </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h2 style="margin:0 0 6px; font-size:1.1rem;">Send Video from Phone to Daily Queue</h2>
+      <form id="mobileUploadForm" onsubmit="submitMobileVideo(event)">
+        <label>Target Channel</label>
+        <select id="uploadChannel">
+          {% for key, ch in channels.items() %}
+          <option value="{{ key }}">{{ ch.label }}</option>
+          {% endfor %}
+        </select>
+        <label>Video File (.mp4 / .mov)</label>
+        <input type="file" id="videoFile" accept="video/*" required />
+        <label>Title (optional)</label>
+        <input id="videoTitle" placeholder="Leave blank to auto-format filename" />
+        <label>Tags (comma-separated, optional)</label>
+        <input id="videoTags" placeholder="e.g. gaming, lore, movie breakdown" />
+        <button type="submit">Add Video to Queue</button>
+      </form>
+      <div id="uploadStatus" style="margin-top:8px; font-size:13px;"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h2 style="margin:0 0 6px; font-size:1.1rem;">Trend Research &amp; AI Script Generator</h2>
+      <label>Channel</label>
+      <select id="channelSelect">
+        {% for key, ch in channels.items() %}
+        <option value="{{ key }}">{{ ch.label }}</option>
+        {% endfor %}
+      </select>
+      <label>Niche Keyword / Topic Hint (optional)</label>
+      <input id="topicInput" placeholder="e.g. GTA 6 lore, dinosaur bedtime story" />
+      <div class="btn-row">
+        <button onclick="loadTrends(document.getElementById('channelSelect').value)">Search EN Trends</button>
+        <button class="secondary" onclick="generatePlan()">AI Script &amp; SEO</button>
+      </div>
+      <div id="outputArea" style="margin-top:12px;"></div>
+    </div>
+
+    
+    <div class="card" style="margin-bottom:16px;">
+      <h2 style="margin:0 0 6px; font-size:1.1rem;">Improve Old Videos &amp; Channel Growth Audit</h2>
+      <label>Select Channel</label>
+      <select id="optChannel">
+        {% for key, ch in channels.items() %}
+        <option value="{{ key }}">{{ ch.label }}</option>
+        {% endfor %}
+      </select>
+      <div class="btn-row">
+        <button onclick="loadMyVideos()">Load My Old Videos</button>
+        <button class="secondary" onclick="runChannelAudit()">Audit Channel Growth</button>
+      </div>
+      <div id="optimizerOutput" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 6px; font-size:1.1rem;">Recent Uploads</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Channel</th><th>Title</th><th>Privacy</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for u in uploads %}
+            <tr>
+              <td>{{ u.channel_key }}</td>
+              <td>{{ u.title or u.filename }}</td>
+              <td>{{ u.privacy_status }}</td>
+              <td>{{ u.status }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function submitMobileVideo(e) {
+      e.preventDefault();
+      const ch = document.getElementById('uploadChannel').value;
+      const file = document.getElementById('videoFile').files[0];
+      const statusEl = document.getElementById('uploadStatus');
+      if (!file) return;
+      statusEl.textContent = 'Uploading to queue...';
+      const form = new FormData();
+      form.append('video', file);
+      form.append('title', document.getElementById('videoTitle').value);
+      form.append('tags', document.getElementById('videoTags').value);
+      const res = await fetch(`/api/queue-upload/${ch}`, { method: 'POST', body: form });
+      const data = await res.json();
+      statusEl.textContent = `Queued ${data.filename} for ${data.channel}.`;
+      setTimeout(() => location.reload(), 1000);
+    }
+
+    let _pollTimer = null;
+    let _activeChannel = null;
+    let _latestPlan = null;
+
+    function renderEditPanel(plan) {
+      if (!plan) return;
+      document.getElementById('editTitle').value = plan.title || '';
+      document.getElementById('editDescription').value = plan.description || '';
+      document.getElementById('editTags').value = (plan.tags || []).join(', ');
+      const box = document.getElementById('editScenesContainer');
+      box.innerHTML = '';
+      (plan.scenes || []).forEach((sc, i) => {
+        const div = document.createElement('div');
+        div.style.cssText = 'background:#0f172a; padding:10px; border-radius:10px; margin-top:8px; border:1px solid #334155;';
+        div.innerHTML = `
+          <div style="font-size:12px; color:#facc15; font-weight:700;">Scene ${i + 1}</div>
+          <label>On-Screen Headline</label>
+          <input class="sc-head" value="${(sc.headline || '').replace(/"/g, '&quot;')}" />
+          <label>Spoken Voiceover</label>
+          <textarea class="sc-narr" rows="2">${sc.narration || ''}</textarea>
+          <label>Image Search Keyword</label>
+          <input class="sc-kw" value="${(sc.stock_keyword || '').replace(/"/g, '&quot;')}" />
+        `;
+        box.appendChild(div);
+      });
+    }
+
+    async function pauseAndEdit() {
+      if (!_activeChannel) return;
+      await fetch(`/api/pause/${_activeChannel}`, { method: 'POST' });
+      document.getElementById('pauseBtn').disabled = true;
+      document.getElementById('continueBtn').disabled = false;
+      if (_latestPlan) {
+        renderEditPanel(_latestPlan);
+        document.getElementById('editPanel').style.display = 'block';
+      } else {
+        document.getElementById('progressMsg').textContent = 'Paused — waiting for script to finish or click Continue.';
+      }
+    }
+
+    async function continueProcess(saveEdits = false) {
+      if (!_activeChannel) return;
+      let payload = {};
+      if (saveEdits && _latestPlan) {
+        const heads = document.querySelectorAll('.sc-head');
+        const narrs = document.querySelectorAll('.sc-narr');
+        const kws = document.querySelectorAll('.sc-kw');
+        const updatedScenes = (_latestPlan.scenes || []).map((sc, i) => ({
+          ...sc,
+          headline: heads[i] ? heads[i].value : sc.headline,
+          narration: narrs[i] ? narrs[i].value : sc.narration,
+          stock_keyword: kws[i] ? kws[i].value : sc.stock_keyword,
+        }));
+        payload = {
+          plan: {
+            ..._latestPlan,
+            title: document.getElementById('editTitle').value,
+            description: document.getElementById('editDescription').value,
+            tags: document.getElementById('editTags').value.split(',').map(s => s.trim()).filter(Boolean),
+            scenes: updatedScenes,
+          },
+        };
+      }
+      document.getElementById('editPanel').style.display = 'none';
+      document.getElementById('previewFilmstrip').innerHTML = '';
+      document.getElementById('videoPreviewBox').style.display = 'none';
+      document.getElementById('videoPlayer').removeAttribute('src');
+      document.getElementById('pauseBtn').disabled = false;
+      document.getElementById('continueBtn').disabled = true;
+      await fetch(`/api/continue/${_activeChannel}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    }
+
+    function startProgressPolling(channelKey) {
+      _activeChannel = channelKey;
+      const card = document.getElementById('progressCard');
+      card.style.display = 'block';
+      document.getElementById('pauseBtn').disabled = false;
+      document.getElementById('continueBtn').disabled = true;
+      document.getElementById('editPanel').style.display = 'none';
+      document.getElementById('previewFilmstrip').innerHTML = '';
+      document.getElementById('videoPreviewBox').style.display = 'none';
+      document.getElementById('videoPlayer').removeAttribute('src');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (_pollTimer) clearInterval(_pollTimer);
+      const poll = async () => {
+        try {
+          const res = await fetch(`/api/progress/${channelKey}`);
+          const p = await res.json();
+          if (p.plan) _latestPlan = p.plan;
+          document.getElementById('progressTopic').textContent = `Working on: ${p.topic || 'Top Trends'}`;
+          const etaTxt = p.paused
+            ? 'PAUSED'
+            : (p.active ? `~${p.eta_seconds}s left (${p.elapsed_seconds}s elapsed)` : `Done in ${p.elapsed_seconds}s`);
+          document.getElementById('progressPct').textContent = `${p.percent}% • ${etaTxt}`;
+          document.getElementById('progressBar').style.width = `${p.percent}%`;
+          document.getElementById('progressMsg').textContent = p.paused ? 'Paused — edit below or click Continue' : p.message;
+          const logEl = document.getElementById('stepsLog');
+          logEl.innerHTML = (p.steps_log || []).map(s => `<div>&bull; ${s}</div>`).join('');
+          logEl.scrollTop = logEl.scrollHeight;
+          const strip = document.getElementById('previewFilmstrip');
+          if (p.preview_images && p.preview_images.length) {
+            strip.innerHTML = p.preview_images.map(u => `<img src="${u}" style="height:110px; border-radius:8px; border:1px solid #334155;" />`).join('');
+          }
+          if (p.video_url) {
+            const vBox = document.getElementById('videoPreviewBox');
+            const player = document.getElementById('videoPlayer');
+            if (player.getAttribute('src') !== p.video_url) {
+              player.setAttribute('src', p.video_url);
+              vBox.style.display = 'block';
+            }
+          }
+          if (p.paused && _latestPlan && document.getElementById('editPanel').style.display === 'none') {
+            renderEditPanel(_latestPlan);
+            document.getElementById('editPanel').style.display = 'block';
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('continueBtn').disabled = false;
+          }
+          if (!p.active && p.percent >= 100) {
+            clearInterval(_pollTimer);
+            _pollTimer = null;
+            document.getElementById('progressMsg').innerHTML = `${p.message} <a href='/' style='margin-left:8px;'>Refresh Dashboard</a>`;
+          } else if (!p.active && p.message && p.message.startsWith('Error:')) {
+            clearInterval(_pollTimer);
+            _pollTimer = null;
+          }
+        } catch (e) {}
+      };
+      poll();
+      _pollTimer = setInterval(poll, 1000);
+    }
+
+    function chooseTopic(title, channelKey) {
+      document.getElementById('topicInput').value = title;
+      document.getElementById('channelSelect').value = channelKey;
+      const badge = document.getElementById('chosenTopicBadge');
+      if (badge) {
+        badge.textContent = `Selected Topic: ${title}`;
+        badge.style.display = 'inline-block';
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function loadTrends(channelKey) {
+      const q = document.getElementById('topicInput').value || '';
+      const out = document.getElementById('outputArea');
+      out.innerHTML = '<p>Fetching English-speaking trends...</p>';
+      const res = await fetch(`/api/trends/${channelKey}?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (!data.trends || !data.trends.length) {
+        out.innerHTML = '<p>No trends returned.</p>';
+        return;
+      }
+      let html = '<div class="table-wrap"><table><thead><tr><th>Region</th><th>Title</th><th>Views/hr</th><th>Action</th></tr></thead><tbody>';
+      for (const t of data.trends) {
+        const safeTitle = (t.title || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        html += `<tr><td>${t.region}</td><td><a href="${t.url}" target="_blank">${safeTitle}</a></td><td>${t.views_per_hour}</td><td><button style="margin:0;padding:6px 10px;font-size:12px;width:auto;" data-title="${safeTitle}" onclick="chooseTopic(this.dataset.title, '${channelKey}')">Select</button></td></tr>`;
+      }
+      html += '</tbody></table></div>';
+      out.innerHTML = html;
+    }
+
+    async function generatePlan() {
+      const ch = document.getElementById('channelSelect').value;
+      const topic = document.getElementById('topicInput').value;
+      const out = document.getElementById('outputArea');
+      out.innerHTML = '<p>Generating script &amp; SEO metadata...</p>';
+      const form = new FormData();
+      form.append('topic_hint', topic);
+      const res = await fetch(`/api/generate-plan/${ch}`, { method: 'POST', body: form });
+      const data = await res.json();
+      out.innerHTML = `<pre>${JSON.stringify(data.plan, null, 2)}</pre>`;
+    }
+
+    async function produceOnly(channelKey) {
+      startProgressPolling(channelKey);
+      const topic = document.getElementById('topicInput').value || '';
+      const out = document.getElementById('outputArea');
+      out.innerHTML = `<p>Generating AI video for "${topic || 'Top Trends'}"...</p>`;
+      const form = new FormData();
+      form.append('topic_hint', topic);
+      form.append('ai_disclosure', document.getElementById(`aiToggle_${channelKey}`).checked ? 'true' : 'false');
+      const res = await fetch(`/api/produce-only/${channelKey}`, { method: 'POST', body: form });
+      const data = await res.json();
+      alert(`Created ${data.file}: ${data.title}`);
+      location.reload();
+    }
+
+    async function runViralAgent(channelKey) {
+      if (!confirm("Let the Viral AI Agent audit this channel, optimize 2 old videos, and create & upload a new viral Short?")) return;
+      const form = new FormData();
+      form.append('ai_disclosure', document.getElementById(`aiToggle_${channelKey}`).checked ? 'true' : 'false');
+      await fetch(`/api/viral-agent/${channelKey}`, { method: 'POST', body: form });
+      startProgressPolling(channelKey);
+    }
+
+    async function runBatch5(channelKey) {
+      const topic = document.getElementById('topicInput').value || '';
+      if (!confirm(`Generate and upload 5 videos for ${channelKey}${topic ? ' on: ' + topic : ''}?`)) return;
+      const form = new FormData();
+      form.append('topic_hint', topic);
+      await fetch(`/api/autopilot-batch/${channelKey}?count=5`, { method: 'POST', body: form });
+      startProgressPolling(channelKey);
+    }
+
+    async function runAutopilot(channelKey) {
+      const topic = document.getElementById('topicInput').value || '';
+      if (!confirm(`Generate and upload a video for ${channelKey}${topic ? ' on: ' + topic : ''}?`)) return;
+      const form = new FormData();
+      form.append('topic_hint', topic);
+      form.append('ai_disclosure', document.getElementById(`aiToggle_${channelKey}`).checked ? 'true' : 'false');
+      await fetch(`/api/autopilot/${channelKey}`, { method: 'POST', body: form });
+      startProgressPolling(channelKey);
+    }
+
+
+    async function loadMyVideos() {
+      const ch = document.getElementById('optChannel').value;
+      const out = document.getElementById('optimizerOutput');
+      out.innerHTML = '<p>Loading your channel videos...</p>';
+      const res = await fetch(`/api/my-videos/${ch}`);
+      const data = await res.json();
+      if (!data.videos || !data.videos.length) {
+        out.innerHTML = '<p>No videos found on this channel.</p>';
+        return;
+      }
+      let html = '<div class="table-wrap"><table><thead><tr><th>Title</th><th>Views</th><th>Privacy</th><th>Action</th></tr></thead><tbody>';
+      for (const v of data.videos) {
+        html += `<tr><td><a href="${v.url}" target="_blank">${v.title}</a></td><td>${v.views}</td><td>${v.privacy}</td><td><button style="margin:0;padding:6px 10px;font-size:12px;width:auto;" onclick="suggestVideoSeo('${ch}', '${v.id}')">Improve SEO</button></td></tr>`;
+      }
+      html += '</tbody></table></div><div id="seoEditorBox" style="margin-top:12px;"></div>';
+      out.innerHTML = html;
+    }
+
+    async function suggestVideoSeo(ch, vidId) {
+      const box = document.getElementById('seoEditorBox');
+      box.innerHTML = '<p>Analyzing video &amp; generating better title/description/tags...</p>';
+      const res = await fetch(`/api/improve-video/${ch}/${vidId}`, { method: 'POST' });
+      const data = await res.json();
+      const s = data.suggestion;
+      box.innerHTML = `
+        <div style="background:#0f172a; padding:12px; border-radius:10px; border:1px solid #38bdf8;">
+          <strong style="color:#facc15;">Suggested Improvement (${s.why_improved || ''})</strong>
+          <label>New Title</label>
+          <input id="seoTitle_${vidId}" value="${(s.title || '').replace(/"/g, '&quot;')}" />
+          <label>New Description</label>
+          <textarea id="seoDesc_${vidId}" rows="3">${s.description || ''}</textarea>
+          <label>New Tags (comma-separated)</label>
+          <input id="seoTags_${vidId}" value="${(s.tags || []).join(', ').replace(/"/g, '&quot;')}" />
+          <button style="background:#10b981;" onclick="applyVideoSeo('${ch}', '${vidId}')">Apply Update to YouTube</button>
+        </div>
+      `;
+    }
+
+    async function applyVideoSeo(ch, vidId) {
+      const payload = {
+        title: document.getElementById(`seoTitle_${vidId}`).value,
+        description: document.getElementById(`seoDesc_${vidId}`).value,
+        tags: document.getElementById(`seoTags_${vidId}`).value.split(',').map(x => x.trim()).filter(Boolean),
+      };
+      const res = await fetch(`/api/apply-video-seo/${ch}/${vidId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      alert(`Updated on YouTube: ${data.video.title}`);
+      loadMyVideos();
+    }
+
+    async function runChannelAudit() {
+      const ch = document.getElementById('optChannel').value;
+      const out = document.getElementById('optimizerOutput');
+      out.innerHTML = '<p>Auditing your channel analytics and videos...</p>';
+      const res = await fetch(`/api/channel-audit/${ch}`);
+      const data = await res.json();
+      out.innerHTML = `<pre>${JSON.stringify(data.audit, null, 2)}</pre>`;
+    }
+
+    async function uploadNow(channelKey) {
+      const res = await fetch(`/api/upload-now/${channelKey}`, { method: 'POST' });
+      const data = await res.json();
+      alert(JSON.stringify(data));
+      location.reload();
+    }
+  </script>
+</body>
+</html>
